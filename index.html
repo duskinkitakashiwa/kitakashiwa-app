@@ -5,13 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ダスキン北柏 社内管理</title>
   
-  <!-- PWA（スマホアプリ化）用の設定 -->
   <link rel="apple-touch-icon" href="duskin-kitakashiwa-logo.jpeg">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#ffffff">
 
-  <!-- Tailwind CSS と React の読み込み -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -21,31 +19,66 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState } = React;
 
     function App() {
       const [currentUser, setCurrentUser] = useState(null);
-      const [activeTab, setActiveTab] = useState('management');
+      const [activeTab, setActiveTab] = useState('shifts');
       const [toast, setToast] = useState('');
 
-      // ダミーデータ（将来Firebase等と連動させる部分）
-      const [shifts] = useState([
-        { id: 1, date: '2026-11-18', staff: '店長', type: '出勤', start: '09:00', end: '18:00', editedBy: '店長' },
-        { id: 2, date: '2026-11-19', staff: 'スタッフA', type: '有休', editedBy: '店長' }
+      // --- 状態管理（シフト・チャットデータ） ---
+      const [shiftsData, setShiftsData] = useState({
+        '2026-11-18-スタッフA': { time: '9:00-18:00', editedBy: 'スタッフA' },
+        '2026-11-18-スタッフB': { time: '有休', editedBy: 'スタッフB' }
+      });
+      const [chatMessages, setChatMessages] = useState([
+        { id: 1, user: '店長', text: 'お疲れ様です。来月のシフト入力をお願いします。', time: '10:00' }
       ]);
-      const [staffList] = useState([
+      const [chatInput, setChatInput] = useState('');
+
+      const staffList = [
         { id: 1, name: '店長', role: 'admin' },
         { id: 2, name: 'スタッフA', role: 'staff' },
         { id: 3, name: 'スタッフB', role: 'staff' },
-      ]);
+      ];
+      const dates = ['2026-11-18', '2026-11-19', '2026-11-20'];
 
-      // ポップアップ通知の処理
       const showToast = (msg) => {
         setToast(msg);
-        setTimeout(() => setToast(''), 3500);
+        setTimeout(() => setToast(''), 3000);
       };
 
-      // ログイン前の画面
+      // シフト入力処理
+      const handleShiftInput = (date, staffName) => {
+        // 一般スタッフは他人のシフトを変更不可
+        if (currentUser.role !== 'admin' && currentUser.name !== staffName) {
+          alert('他のスタッフのシフトは変更できません。');
+          return;
+        }
+        
+        const currentShift = shiftsData[`${date}-${staffName}`]?.time || '';
+        const input = prompt(`${date} の ${staffName} のシフト\n（例: 9:00-18:00, 有休, 休み など）`, currentShift);
+        
+        if (input !== null) {
+          setShiftsData({
+            ...shiftsData,
+            [`${date}-${staffName}`]: { time: input, editedBy: currentUser.name }
+          });
+          showToast('シフトを更新しました');
+        }
+      };
+
+      // チャット送信処理
+      const sendChatMessage = (e) => {
+        e.preventDefault();
+        if(!chatInput.trim()) return;
+        const now = new Date();
+        const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+        setChatMessages([...chatMessages, { id: Date.now(), user: currentUser.name, text: chatInput, time: timeStr }]);
+        setChatInput('');
+      };
+
+      // --- ログイン画面 ---
       if (!currentUser) {
         return (
           <div className="min-h-screen flex items-center justify-center p-4 bg-gray-100">
@@ -53,13 +86,12 @@
               <div className="text-center space-y-3">
                 <img src="duskin-kitakashiwa-logo.jpeg" alt="ロゴ" className="w-24 h-24 mx-auto rounded-xl shadow-sm object-cover" onerror="this.style.display='none'" />
                 <h1 className="text-2xl font-bold tracking-wider text-gray-900">ダスキン北柏</h1>
-                <p className="text-gray-500 text-sm font-medium">社内管理システム</p>
               </div>
               <div className="space-y-4">
-                <button onClick={() => setCurrentUser({ name: '店長', role: 'admin' })} className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md flex justify-center items-center gap-2">
+                <button onClick={() => setCurrentUser({ name: '店長', role: 'admin' })} className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-lg shadow-md">
                   店長（管理者）としてログイン
                 </button>
-                <button onClick={() => setCurrentUser({ name: 'スタッフA', role: 'staff' })} className="w-full py-4 bg-gray-700 hover:bg-gray-800 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md flex justify-center items-center gap-2">
+                <button onClick={() => setCurrentUser({ name: 'スタッフA', role: 'staff' })} className="w-full py-4 bg-gray-700 hover:bg-gray-800 text-white rounded-xl font-bold text-lg shadow-md">
                   一般スタッフとしてログイン
                 </button>
               </div>
@@ -68,104 +100,108 @@
         );
       }
 
-      // ログイン後の画面
+      // --- メイン画面 ---
       return (
-        <div className="min-h-screen pb-20">
-          {/* 美しい通知（Toast） */}
+        <div className="min-h-screen pb-20 flex flex-col">
           {toast && (
-            <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-bounce text-sm font-bold">
+            <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 text-sm font-bold">
               ✅ {toast}
             </div>
           )}
 
-          {/* ヘッダー */}
           <header className="bg-white shadow-sm sticky top-0 z-40 border-b">
             <div className="px-4 h-16 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src="duskin-kitakashiwa-logo.jpeg" alt="ロゴ" className="w-9 h-9 rounded-lg shadow-sm object-cover" onerror="this.style.display='none'" />
-                <span className="font-extrabold text-gray-800 text-xl tracking-tight">北柏App</span>
+                <span className="font-extrabold text-gray-800 text-xl">北柏App</span>
                 <span className="text-xs bg-red-50 text-red-700 px-3 py-1 rounded-full font-bold border border-red-100">
                   {currentUser.name}
                 </span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1 text-sm font-bold text-red-600 bg-red-50 px-3 py-1 rounded-lg border border-red-100">
-                  🕒 残業: 12h ⚠️
-                </div>
-                <button onClick={() => setCurrentUser(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
-                  🚪
-                </button>
-              </div>
+              <button onClick={() => setCurrentUser(null)} className="p-2 text-gray-500 font-bold text-sm bg-gray-100 rounded-lg">ログアウト</button>
             </div>
           </header>
 
-          {/* メインコンテンツ */}
-          <div className="p-4 max-w-4xl mx-auto space-y-6 mt-2">
-            {currentUser.role === 'admin' ? (
-              <div className="space-y-6">
-                {/* タブ切り替え */}
-                <div className="flex bg-gray-200/80 p-1 rounded-xl shadow-inner">
-                  <button onClick={() => setActiveTab('shifts')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${activeTab === 'shifts' ? 'bg-white shadow-sm text-red-600' : 'text-gray-500 hover:text-gray-700'}`}>📋 シフト管理</button>
-                  <button onClick={() => setActiveTab('management')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${activeTab === 'management' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>⚙️ 集計・管理</button>
-                </div>
+          <div className="flex-1 p-4 max-w-4xl mx-auto w-full space-y-4">
+            {/* タブメニュー */}
+            <div className="flex bg-gray-200 p-1 rounded-xl shadow-inner text-sm font-bold">
+              <button onClick={() => setActiveTab('shifts')} className={`flex-1 py-3 rounded-lg ${activeTab === 'shifts' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'}`}>📋 シフト</button>
+              <button onClick={() => setActiveTab('chat')} className={`flex-1 py-3 rounded-lg ${activeTab === 'chat' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>💬 チャット</button>
+              {currentUser.role === 'admin' && (
+                <button onClick={() => setActiveTab('management')} className={`flex-1 py-3 rounded-lg ${activeTab === 'management' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>⚙️ 管理</button>
+              )}
+            </div>
 
-                {activeTab === 'shifts' && (
-                   <div className="bg-white p-8 rounded-2xl shadow-sm border text-center text-gray-500 font-medium">
-                     （シフト登録・マトリックス表などの機能はここに表示されます）
-                   </div>
-                )}
-
-                {activeTab === 'management' && (
-                  <div className="space-y-6">
-                    {/* アカウント管理 */}
-                    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                      <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex items-center gap-2 font-bold text-indigo-900">
-                        ⚙️ スタッフアカウント管理
-                      </div>
-                      <div className="p-4 space-y-3">
-                        {staffList.filter(s => s.role !== 'admin').map(staff => (
-                          <div key={staff.id} className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                            <span className="font-bold text-gray-800 text-lg">{staff.name}</span>
-                            <div className="flex gap-2">
-                              <button onClick={() => showToast(`${staff.name}さんのパスワードを初期化しました`)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 font-bold flex items-center gap-1 active:scale-95 transition-transform shadow-sm">
-                                🔑 初期化
-                              </button>
-                              <button onClick={() => { if(window.confirm(`${staff.name}さんのアカウントを停止しますか？`)) showToast(`${staff.name}さんのアカウントを停止しました`); }} className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50 font-bold flex items-center gap-1 active:scale-95 transition-transform shadow-sm">
-                                🚫 停止
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 有給申請記録 */}
-                    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                      <div className="bg-emerald-50 p-4 border-b border-emerald-100 flex items-center gap-2 font-bold text-emerald-900">
-                        ✅ 有給休暇 申請記録
-                      </div>
-                      <div className="p-4 space-y-2">
-                         {shifts.filter(s => s.type === '有休').map(shift => (
-                           <div key={shift.id} className="flex justify-between items-center p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 rounded-lg transition-colors">
-                             <span className="font-bold text-gray-800">{shift.staff}</span>
-                             <span className="text-gray-500 font-medium">{shift.date} 取得</span>
-                           </div>
-                         ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
+            {/* シフト管理タブ */}
+            {activeTab === 'shifts' && (
+              <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
+                <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">月間マトリックス表（タップで入力）</div>
+                <table className="w-full text-sm text-center">
+                  <thead>
+                    <tr className="bg-gray-100 border-b">
+                      <th className="p-3 border-r min-w-[100px]">日付</th>
+                      {staffList.filter(s => s.role !== 'admin').map(staff => (
+                        <th key={staff.id} className="p-3 border-r">{staff.name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dates.map(date => (
+                      <tr key={date} className="border-b">
+                        <td className="p-3 border-r font-medium text-gray-600">{date}</td>
+                        {staffList.filter(s => s.role !== 'admin').map(staff => {
+                          const shift = shiftsData[`${date}-${staff.name}`];
+                          const isEditedByAdmin = shift?.editedBy === '店長';
+                          return (
+                            <td 
+                              key={staff.id} 
+                              onClick={() => handleShiftInput(date, staff.name)}
+                              className={`p-3 border-r cursor-pointer hover:bg-gray-50 transition-colors
+                                ${isEditedByAdmin ? 'bg-orange-50 text-orange-700 font-bold' : 'text-gray-800'}`}
+                            >
+                              {shift ? shift.time : <span className="text-gray-300">-</span>}
+                              {isEditedByAdmin && <div className="text-[10px] text-orange-600">※店長修正</div>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ) : (
-              <div className="bg-white p-8 rounded-2xl shadow-sm border text-center text-gray-500 font-medium mt-10">
-                一般スタッフ用の画面です。（集計・管理タブは表示されません）
+            )}
+
+            {/* チャットタブ */}
+            {activeTab === 'chat' && (
+              <div className="bg-white rounded-2xl shadow-sm border h-[60vh] flex flex-col">
+                <div className="p-4 bg-gray-50 border-b font-bold text-gray-700">社内連絡用チャット</div>
+                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} className={`flex flex-col ${msg.user === currentUser.name ? 'items-end' : 'items-start'}`}>
+                      <span className="text-xs text-gray-500 mb-1">{msg.user}</span>
+                      <div className={`px-4 py-2 rounded-2xl max-w-[80%] ${msg.user === currentUser.name ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
+                        {msg.text}
+                      </div>
+                      <span className="text-[10px] text-gray-400 mt-1">{msg.time}</span>
+                    </div>
+                  ))}
+                </div>
+                <form onSubmit={sendChatMessage} className="p-3 border-t flex gap-2">
+                  <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="メッセージを入力..." className="flex-1 border rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-sm">送信</button>
+                </form>
+              </div>
+            )}
+
+            {/* 集計・管理タブ */}
+            {activeTab === 'management' && (
+              <div className="bg-white rounded-2xl shadow-sm border p-6 text-center text-gray-500 font-medium">
+                店長専用の集計・アカウント管理機能がここに入ります。
               </div>
             )}
           </div>
         </div>
       );
     }
-
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
   </script>
