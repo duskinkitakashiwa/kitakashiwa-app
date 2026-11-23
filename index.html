@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ダスキン北柏 社内管理</title>
+  
+  <!-- PWA（スマホアプリ化）用の設定 -->
+  <link rel="apple-touch-icon" href="duskin-kitakashiwa-logo.jpeg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+
+  <!-- Tailwind CSS と React の読み込み -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      const [currentUser, setCurrentUser] = useState(null);
+      const [activeTab, setActiveTab] = useState('management');
+      const [toast, setToast] = useState('');
+
+      // ダミーデータ（将来Firebase等と連動させる部分）
+      const [shifts] = useState([
+        { id: 1, date: '2026-11-18', staff: '店長', type: '出勤', start: '09:00', end: '18:00', editedBy: '店長' },
+        { id: 2, date: '2026-11-19', staff: 'スタッフA', type: '有休', editedBy: '店長' }
+      ]);
+      const [staffList] = useState([
+        { id: 1, name: '店長', role: 'admin' },
+        { id: 2, name: 'スタッフA', role: 'staff' },
+        { id: 3, name: 'スタッフB', role: 'staff' },
+      ]);
+
+      // ポップアップ通知の処理
+      const showToast = (msg) => {
+        setToast(msg);
+        setTimeout(() => setToast(''), 3500);
+      };
+
+      // ログイン前の画面
+      if (!currentUser) {
+        return (
+          <div className="min-h-screen flex items-center justify-center p-4 bg-gray-100">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border-t-4 border-red-600 p-8 space-y-8">
+              <div className="text-center space-y-3">
+                <img src="duskin-kitakashiwa-logo.jpeg" alt="ロゴ" className="w-24 h-24 mx-auto rounded-xl shadow-sm object-cover" onerror="this.style.display='none'" />
+                <h1 className="text-2xl font-bold tracking-wider text-gray-900">ダスキン北柏</h1>
+                <p className="text-gray-500 text-sm font-medium">社内管理システム</p>
+              </div>
+              <div className="space-y-4">
+                <button onClick={() => setCurrentUser({ name: '店長', role: 'admin' })} className="w-full py-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md flex justify-center items-center gap-2">
+                  店長（管理者）としてログイン
+                </button>
+                <button onClick={() => setCurrentUser({ name: 'スタッフA', role: 'staff' })} className="w-full py-4 bg-gray-700 hover:bg-gray-800 text-white rounded-xl font-bold text-lg transition-transform active:scale-95 shadow-md flex justify-center items-center gap-2">
+                  一般スタッフとしてログイン
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // ログイン後の画面
+      return (
+        <div className="min-h-screen pb-20">
+          {/* 美しい通知（Toast） */}
+          {toast && (
+            <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-bounce text-sm font-bold">
+              ✅ {toast}
+            </div>
+          )}
+
+          {/* ヘッダー */}
+          <header className="bg-white shadow-sm sticky top-0 z-40 border-b">
+            <div className="px-4 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img src="duskin-kitakashiwa-logo.jpeg" alt="ロゴ" className="w-9 h-9 rounded-lg shadow-sm object-cover" onerror="this.style.display='none'" />
+                <span className="font-extrabold text-gray-800 text-xl tracking-tight">北柏App</span>
+                <span className="text-xs bg-red-50 text-red-700 px-3 py-1 rounded-full font-bold border border-red-100">
+                  {currentUser.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1 text-sm font-bold text-red-600 bg-red-50 px-3 py-1 rounded-lg border border-red-100">
+                  🕒 残業: 12h ⚠️
+                </div>
+                <button onClick={() => setCurrentUser(null)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
+                  🚪
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* メインコンテンツ */}
+          <div className="p-4 max-w-4xl mx-auto space-y-6 mt-2">
+            {currentUser.role === 'admin' ? (
+              <div className="space-y-6">
+                {/* タブ切り替え */}
+                <div className="flex bg-gray-200/80 p-1 rounded-xl shadow-inner">
+                  <button onClick={() => setActiveTab('shifts')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${activeTab === 'shifts' ? 'bg-white shadow-sm text-red-600' : 'text-gray-500 hover:text-gray-700'}`}>📋 シフト管理</button>
+                  <button onClick={() => setActiveTab('management')} className={`flex-1 py-3 text-sm font-bold rounded-lg transition-all ${activeTab === 'management' ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}>⚙️ 集計・管理</button>
+                </div>
+
+                {activeTab === 'shifts' && (
+                   <div className="bg-white p-8 rounded-2xl shadow-sm border text-center text-gray-500 font-medium">
+                     （シフト登録・マトリックス表などの機能はここに表示されます）
+                   </div>
+                )}
+
+                {activeTab === 'management' && (
+                  <div className="space-y-6">
+                    {/* アカウント管理 */}
+                    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                      <div className="bg-indigo-50 p-4 border-b border-indigo-100 flex items-center gap-2 font-bold text-indigo-900">
+                        ⚙️ スタッフアカウント管理
+                      </div>
+                      <div className="p-4 space-y-3">
+                        {staffList.filter(s => s.role !== 'admin').map(staff => (
+                          <div key={staff.id} className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                            <span className="font-bold text-gray-800 text-lg">{staff.name}</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => showToast(`${staff.name}さんのパスワードを初期化しました`)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 font-bold flex items-center gap-1 active:scale-95 transition-transform shadow-sm">
+                                🔑 初期化
+                              </button>
+                              <button onClick={() => { if(window.confirm(`${staff.name}さんのアカウントを停止しますか？`)) showToast(`${staff.name}さんのアカウントを停止しました`); }} className="px-4 py-2 bg-white border border-red-200 text-red-600 text-sm rounded-lg hover:bg-red-50 font-bold flex items-center gap-1 active:scale-95 transition-transform shadow-sm">
+                                🚫 停止
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 有給申請記録 */}
+                    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                      <div className="bg-emerald-50 p-4 border-b border-emerald-100 flex items-center gap-2 font-bold text-emerald-900">
+                        ✅ 有給休暇 申請記録
+                      </div>
+                      <div className="p-4 space-y-2">
+                         {shifts.filter(s => s.type === '有休').map(shift => (
+                           <div key={shift.id} className="flex justify-between items-center p-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 rounded-lg transition-colors">
+                             <span className="font-bold text-gray-800">{shift.staff}</span>
+                             <span className="text-gray-500 font-medium">{shift.date} 取得</span>
+                           </div>
+                         ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-white p-8 rounded-2xl shadow-sm border text-center text-gray-500 font-medium mt-10">
+                一般スタッフ用の画面です。（集計・管理タブは表示されません）
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
